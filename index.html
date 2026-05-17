@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Search 2026</title>
+
+<!-- ═══════════════════════════════════════════════
+     CONFIGURATION — modifier ces 2 valeurs
+     Voir README.md pour obtenir API_KEY et WEBHOOK_URL
+═══════════════════════════════════════════════ -->
+<script>
+const CONFIG = {
+  SHEET_ID:    "1zQCXorQC0CqUV_v9JuCT3dA2hZ-S85u05tK6eabwyIc",
+  API_KEY:     "AIzaSyDwEevYIkEXrNd0C4cA0f_qd4tW9FrERgk",
+  WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbwFNe4TirTkeu0ChOlXxekzq8X1uhqf0yOmmXpD6tTStYwDXQiyrtKpjFkOrFWpFRuJyA/exec",
+  SEUIL_RELANCE: 10
+};
+</script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;font-size:14px;background:#f5f4f0;color:#1a1a18;min-height:100vh}
+button,select,input,textarea{font-family:inherit;font-size:inherit}
+
+/* Layout */
+.app{max-width:960px;margin:0 auto;padding:1.5rem 1rem 3rem}
+
+/* Topbar */
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap}
+.app-title{font-size:17px;font-weight:600;display:flex;align-items:center;gap:6px;flex:1;min-width:160px}
+.btn{background:#fff;border:1px solid #c5c3b8;border-radius:8px;padding:6px 14px;font-size:13px;color:#3a3a38;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .12s}
+.btn:hover{background:#ece9e2}
+.btn:disabled{opacity:.45;cursor:default}
+.btn-primary{background:#1a1a18;color:#fff;border-color:#1a1a18}
+.btn-primary:hover{background:#333}
+.btn-danger{background:transparent;color:#a32d2d;border-color:#f09595}
+.btn-danger:hover{background:#fcebeb}
+
+/* Stats */
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stat{background:#fff;border:1px solid #d3d1c7;border-radius:8px;padding:5px 12px;font-size:12px;color:#666}
+.stat strong{color:#1a1a18;font-size:15px;font-weight:600;display:block}
+
+/* Alertes */
+.alertes{display:flex;flex-direction:column;gap:6px;margin-bottom:1rem}
+.alerte{padding:8px 14px;border-radius:8px;font-size:13px;display:flex;align-items:center;gap:8px}
+.alerte-warn{background:#faeeda;color:#633806}
+.alerte-relance{background:#faece7;color:#711b0c}
+.alerte-info{background:#e6f1fb;color:#0c447c}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:1.5px solid #d3d1c7;margin-bottom:1.25rem}
+.tab{background:transparent;border:none;padding:9px 20px;font-size:14px;color:#888780;border-bottom:2px solid transparent;margin-bottom:-1.5px;cursor:pointer}
+.tab.active{color:#1a1a18;font-weight:600;border-bottom-color:#1a1a18}
+
+/* Filtres */
+.filtres{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:1rem;align-items:center}
+.fbtn{background:#fff;border:1px solid #d3d1c7;border-radius:20px;padding:4px 13px;font-size:12px;color:#666;cursor:pointer}
+.fbtn:hover{background:#ece9e2}
+.fbtn.active{background:#1a1a18;color:#fff;border-color:#1a1a18}
+.search-inp{height:32px;padding:0 10px;border:1px solid #d3d1c7;border-radius:8px;background:#fff;color:#1a1a18;flex:1;min-width:160px;max-width:240px}
+.search-inp:focus{outline:none;border-color:#888780}
+.sort-sel{height:32px;padding:0 8px;border:1px solid #d3d1c7;border-radius:8px;background:#fff;color:#1a1a18}
+.count{font-size:12px;color:#888780;margin-bottom:8px}
+
+/* Cartes */
+.cartes{display:flex;flex-direction:column;gap:8px}
+.carte{background:#fff;border:1px solid #d3d1c7;border-radius:12px;padding:13px 15px;display:flex;gap:12px;align-items:flex-start;transition:border-color .12s}
+.carte:hover{border-color:#888780}
+.carte.ecarte{opacity:.4}
+.carte-body{flex:1;min-width:0}
+.carte-top{display:flex;align-items:flex-start;gap:8px;margin-bottom:5px;flex-wrap:wrap}
+.poste{font-size:14px;font-weight:600;line-height:1.3}
+.badges{display:flex;gap:4px;flex-wrap:wrap}
+.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+.b-cible{background:#eaf3de;color:#27500a}
+.b-jugement{background:#f1efe8;color:#5f5e5a}
+.b-ecarte-auto{background:#fcebeb;color:#791f1f}
+.b-new{background:#e6f1fb;color:#0c447c}
+.b-shortlist{background:#eaf3de;color:#0f6e56}
+.b-deadline{background:#faeeda;color:#633806}
+.meta{font-size:12px;color:#888780;display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;align-items:center}
+.cabinet-tag{font-size:11px;background:#f1efe8;color:#5f5e5a;border-radius:20px;padding:1px 8px}
+.salaire-tag{font-size:12px;color:#3b6d11;font-weight:500}
+.carte-actions{display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0}
+.btn-sm{padding:4px 11px;font-size:12px;border-radius:7px}
+
+/* Vue Suivi */
+.suivi-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{text-align:left;font-size:11px;font-weight:600;color:#888780;padding:8px 10px;border-bottom:1.5px solid #d3d1c7;white-space:nowrap;background:#faf9f6}
+tbody td{padding:10px 8px;border-bottom:1px solid #f1efe8;vertical-align:top}
+tbody tr:hover td{background:#fafaf8}
+.td-poste{font-weight:600;max-width:180px}
+.td-client{color:#666;font-size:12px;max-width:120px}
+.sel-inline{font-size:12px;border:1px solid #d3d1c7;border-radius:6px;padding:3px 5px;background:#fff;color:#1a1a18;max-width:130px}
+.inp-inline{font-size:12px;border:1px solid #d3d1c7;border-radius:6px;padding:3px 6px;width:105px;background:#fff;color:#1a1a18}
+.notes-txt{font-size:12px;border:1px solid #d3d1c7;border-radius:6px;padding:4px 6px;width:100%;resize:vertical;min-height:44px;background:#fff;color:#1a1a18;font-family:inherit}
+.lien-btn{font-size:11px;color:#5f5e5a;border:1px solid #d3d1c7;border-radius:6px;padding:3px 8px;background:#fff;cursor:pointer;text-decoration:none;white-space:nowrap;display:inline-block}
+.lien-btn:hover{background:#f1efe8}
+
+/* Statut colors */
+.s-candidater{color:#185fa5;font-weight:600}
+.s-postule{color:#0f6e56;font-weight:600}
+.s-entretien{color:#639922;font-weight:600}
+.s-relance{color:#ba7517;font-weight:600}
+.s-sansreponse{color:#888780}
+.s-refus{color:#a32d2d}
+
+/* Empty */
+.empty{text-align:center;padding:3rem;color:#888780;font-size:14px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="app-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.6"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      Job Search 2026
+    </div>
+    <div class="stats">
+      <div class="stat"><strong id="s-total">—</strong>offres</div>
+      <div class="stat"><strong id="s-short">—</strong>à candidater</div>
+      <div class="stat"><strong id="s-postule">—</strong>postulées</div>
+      <div class="stat"><strong id="s-entretien">—</strong>entretiens</div>
+    </div>
+    <button class="btn" id="btnRefresh" onclick="charger()">
+      ↻ Rafraîchir
+    </button>
+  </div>
+
+  <!-- ALERTES -->
+  <div id="alertes" class="alertes"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="setVue('triage',this)">Triage</button>
+    <button class="tab" onclick="setVue('suivi',this)">Suivi candidatures</button>
+  </div>
+
+  <!-- VUE TRIAGE -->
+  <div id="vue-triage">
+    <div class="filtres">
+      <button class="fbtn active" data-f="actives"   onclick="setF(this)">Actives</button>
+      <button class="fbtn"        data-f="shortlist" onclick="setF(this)">À candidater</button>
+      <button class="fbtn"        data-f="cible"     onclick="setF(this)">🎯 Cibles</button>
+      <button class="fbtn"        data-f="jugement"  onclick="setF(this)">⚖️ À juger</button>
+      <button class="fbtn"        data-f="ecarte"    onclick="setF(this)">✕ Écartées</button>
+      <button class="fbtn"        data-f="toutes"    onclick="setF(this)">Toutes</button>
+      <input class="search-inp" id="qTriage" type="text" placeholder="Rechercher…" oninput="renderTriage()">
+      <select class="sort-sel" id="sortTriage" onchange="renderTriage()">
+        <option value="date">Plus récentes</option>
+        <option value="cat">Scoring</option>
+        <option value="client">Entreprise</option>
+      </select>
+    </div>
+    <div class="count" id="cntTriage"></div>
+    <div class="cartes" id="cartesTriage"></div>
+  </div>
+
+  <!-- VUE SUIVI -->
+  <div id="vue-suivi" style="display:none">
+    <div class="filtres">
+      <button class="fbtn active" data-fs="actif"     onclick="setFS(this)">En cours</button>
+      <button class="fbtn"        data-fs="postule"   onclick="setFS(this)">Postulées</button>
+      <button class="fbtn"        data-fs="entretien" onclick="setFS(this)">Entretiens</button>
+      <button class="fbtn"        data-fs="clos"      onclick="setFS(this)">Clôturées</button>
+      <button class="fbtn"        data-fs="toutes"    onclick="setFS(this)">Toutes</button>
+      <input class="search-inp" id="qSuivi" type="text" placeholder="Rechercher…" oninput="renderSuivi()">
+    </div>
+    <div class="count" id="cntSuivi"></div>
+    <div class="suivi-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Poste</th>
+            <th>Entreprise</th>
+            <th>Statut</th>
+            <th>CV</th>
+            <th>Candidature</th>
+            <th>Deadline</th>
+            <th>Contact</th>
+            <th>Relance</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbodySuivi"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// ÉTAT
+// ═══════════════════════════════════════════════
+let offres = [];
+let filtreT = "actives";
+let filtreS = "actif";
+const STATUTS = ["À candidater","Postulé","Entretien","Relancé","Sans réponse","Refus"];
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function setVue(v, el) {
+  document.getElementById("vue-triage").style.display = v === "triage" ? "" : "none";
+  document.getElementById("vue-suivi").style.display  = v === "suivi"  ? "" : "none";
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === el));
+}
+
+function setF(el) {
+  filtreT = el.dataset.f;
+  document.querySelectorAll("[data-f]").forEach(b => b.classList.toggle("active", b === el));
+  renderTriage();
+}
+
+function setFS(el) {
+  filtreS = el.dataset.fs;
+  document.querySelectorAll("[data-fs]").forEach(b => b.classList.toggle("active", b === el));
+  renderSuivi();
+}
+
+// ═══════════════════════════════════════════════
+// CHARGEMENT DONNÉES
+// ═══════════════════════════════════════════════
+async function charger() {
+  const btn = document.getElementById("btnRefresh");
+  btn.disabled = true;
+  btn.textContent = "Chargement…";
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/Offres?key=${CONFIG.API_KEY}`;
+    const r   = await fetch(url);
+    const d   = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    const rows = (d.values || []).slice(1); // ignorer en-têtes
+    offres = rows.map(r => ({
+      id:              col(r,0),  jobId:           col(r,1),
+      client:          col(r,2),  cabinet:         col(r,3),
+      poste:           col(r,4),  source:          col(r,5),
+      dateReception:   col(r,6),  dateOffre:       col(r,7),
+      note:            col(r,8),  catAuto:         col(r,9),
+      catValidee:      col(r,10), triageAction:    col(r,11),
+      suiviStatut:     col(r,12), localisation:    col(r,13),
+      taille:          col(r,14), salaire:         col(r,15),
+      contact:         col(r,16), lien:            col(r,17),
+      dateCandidature: col(r,18), dateLimite:      col(r,19),
+      notesSuivi:      col(r,20), doublonIds:      col(r,21),
+      sourcesVues:     col(r,22), cvUtilise:       col(r,23),
+      dateRelance:     col(r,24)
+    })).filter(o => o.id && o.poste);
+  } catch(e) {
+    alert("Erreur chargement : " + e.message + "\n\nVérifier API_KEY et partage du Sheet.");
+  }
+  btn.disabled = false;
+  btn.textContent = "↻ Rafraîchir";
+  majStats();
+  majAlertes();
+  renderTriage();
+  renderSuivi();
+}
+
+const col = (r, i) => (r[i] || "").toString().trim();
+
+// ═══════════════════════════════════════════════
+// ÉCRITURE WEBHOOK
+// ═══════════════════════════════════════════════
+async function ecrire(id, champ, valeur) {
+  // Mise à jour locale immédiate
+  const o = offres.find(x => x.id === id);
+  if (o) {
+    const camel = champ.replace(/_([a-z])/g, (_,c) => c.toUpperCase());
+    o[camel] = valeur;
+  }
+  // Envoi au webhook
+  try {
+    await fetch(CONFIG.WEBHOOK_URL, {
+      method: "POST",
+      mode:   "no-cors", // Apps Script ne renvoie pas CORS header — on ignore la réponse
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ id, champ, valeur })
+    });
+  } catch(e) {
+    console.warn("Webhook:", e.message);
+  }
+  majStats();
+  majAlertes();
+}
+
+// ═══════════════════════════════════════════════
+// ACTIONS TRIAGE
+// ═══════════════════════════════════════════════
+async function candidater(id) {
+  await ecrire(id, "triage_action", "en_suivi");
+  await ecrire(id, "suivi_statut",  "À candidater");
+  renderTriage();
+}
+
+async function ecarter(id) {
+  await ecrire(id, "triage_action", "ecarte_manuel");
+  await ecrire(id, "suivi_statut",  "");
+  renderTriage();
+}
+
+async function reactiverCarte(id) {
+  await ecrire(id, "triage_action", "");
+  await ecrire(id, "suivi_statut",  "");
+  renderTriage();
+}
+
+// ═══════════════════════════════════════════════
+// STATS & ALERTES
+// ═══════════════════════════════════════════════
+function majStats() {
+  document.getElementById("s-total").textContent     = offres.length;
+  document.getElementById("s-short").textContent     = offres.filter(o => o.suiviStatut === "À candidater").length;
+  document.getElementById("s-postule").textContent   = offres.filter(o => ["Postulé","Entretien","Relancé"].includes(o.suiviStatut)).length;
+  document.getElementById("s-entretien").textContent = offres.filter(o => o.suiviStatut === "Entretien").length;
+}
+
+function majAlertes() {
+  const auj = new Date();
+  const al  = [];
+
+  // Deadlines < 7j
+  const dl = offres.filter(o => {
+    if (!o.dateLimite || o.triageAction === "ecarte_manuel") return false;
+    const j = (new Date(o.dateLimite) - auj) / 86400000;
+    return j >= 0 && j < 7;
+  });
+  if (dl.length) al.push({ cls:"alerte-warn",    txt:`⚠️ ${dl.length} offre(s) avec deadline dans moins de 7 jours` });
+
+  // Relances en retard
+  const rl = offres.filter(o => {
+    if (!o.dateCandidature || !["Postulé","Relancé"].includes(o.suiviStatut)) return false;
+    return (auj - new Date(o.dateCandidature)) / 86400000 > CONFIG.SEUIL_RELANCE;
+  });
+  if (rl.length) al.push({ cls:"alerte-relance", txt:`🔔 ${rl.length} candidature(s) sans réponse depuis plus de ${CONFIG.SEUIL_RELANCE} jours` });
+
+  // Shortlist en attente
+  const sh = offres.filter(o => o.suiviStatut === "À candidater").length;
+  if (sh) al.push({ cls:"alerte-info",   txt:`📋 ${sh} offre(s) shortlistée(s) à candidater` });
+
+  document.getElementById("alertes").innerHTML = al.map(a =>
+    `<div class="alerte ${a.cls}">${a.txt}</div>`).join("");
+}
+
+// ═══════════════════════════════════════════════
+// RENDU TRIAGE
+// ═══════════════════════════════════════════════
+function renderTriage() {
+  const q    = (document.getElementById("qTriage").value || "").toLowerCase();
+  const sort = document.getElementById("sortTriage").value;
+  const auj  = new Date();
+
+  let data = offres.filter(o => {
+    if (q && !(o.poste+o.client+o.cabinet+o.localisation).toLowerCase().includes(q)) return false;
+    const cat = o.catValidee || o.catAuto;
+    const ecarte = o.triageAction === "ecarte_manuel";
+    if (filtreT === "actives")   return !ecarte;
+    if (filtreT === "shortlist") return o.suiviStatut === "À candidater";
+    if (filtreT === "cible")     return cat === "cible" && !ecarte;
+    if (filtreT === "jugement")  return cat === "jugement" && !ecarte;
+    if (filtreT === "ecarte")    return ecarte;
+    return true;
+  });
+
+  if (sort === "cat")    data.sort((a,b) => ["cible","jugement","ecarte"].indexOf(a.catAuto) - ["cible","jugement","ecarte"].indexOf(b.catAuto));
+  else if (sort==="client") data.sort((a,b) => a.client.localeCompare(b.client,"fr"));
+  else data.sort((a,b) => new Date(b.dateReception) - new Date(a.dateReception));
+
+  document.getElementById("cntTriage").textContent = `${data.length} offre${data.length>1?"s":""}`;
+
+  const el = document.getElementById("cartesTriage");
+  if (!data.length) { el.innerHTML = '<div class="empty">Aucune offre pour ce filtre.</div>'; return; }
+
+  el.innerHTML = data.map(o => {
+    const cat      = o.catValidee || o.catAuto;
+    const isNew    = (auj - new Date(o.dateReception)) < 48*3600000;
+    const isShort  = o.suiviStatut === "À candidater";
+    const isEcarte = o.triageAction === "ecarte_manuel";
+    const dlUrgent = o.dateLimite && (new Date(o.dateLimite)-auj)/86400000 < 7 && (new Date(o.dateLimite)-auj)/86400000 >= 0;
+    const clientAff= o.client === "À confirmer" ? "—" : esc(o.client);
+
+    const badgeCat = cat==="cible"   ? `<span class="badge b-cible">Cible</span>`
+                   : cat==="ecarte"  ? `<span class="badge b-ecarte-auto">Écarté auto</span>`
+                   :                  `<span class="badge b-jugement">À juger</span>`;
+
+    let actions;
+    if (isEcarte) {
+      actions = `<button class="btn btn-sm" onclick="reactiverCarte('${o.id}')">↩ Réactiver</button>`;
+    } else if (isShort) {
+      actions = `<button class="btn btn-sm" style="background:#eaf3de;color:#0f6e56;border-color:#c0dd97" disabled>✓ Shortlistée</button>
+                 <button class="btn btn-sm btn-danger" onclick="ecarter('${o.id}')">Écarter</button>`;
+    } else {
+      actions = `<button class="btn btn-sm btn-primary" onclick="candidater('${o.id}')">+ À candidater</button>
+                 <button class="btn btn-sm btn-danger" onclick="ecarter('${o.id}')">Écarter</button>`;
+    }
+
+    return `<div class="carte${isEcarte?" ecarte":""}">
+  <div class="carte-body">
+    <div class="carte-top">
+      <span class="poste">${esc(o.poste)}</span>
+      <div class="badges">
+        ${badgeCat}
+        ${isNew   ? '<span class="badge b-new">Nouveau</span>' : ""}
+        ${isShort ? '<span class="badge b-shortlist">À candidater</span>' : ""}
+        ${dlUrgent ? `<span class="badge b-deadline">⚠ Deadline ${o.dateLimite}</span>` : ""}
+      </div>
+    </div>
+    <div class="meta">
+      <span>${clientAff}</span>
+      ${o.cabinet ? `<span class="cabinet-tag">${esc(o.cabinet)}</span>` : ""}
+      ${o.localisation ? `<span>📍 ${esc(o.localisation)}</span>` : ""}
+      ${o.salaire ? `<span class="salaire-tag">💰 ${esc(o.salaire)}</span>` : ""}
+      <span>${o.dateReception}</span>
+    </div>
+  </div>
+  <div class="carte-actions">
+    ${actions}
+    ${o.lien ? `<a class="btn btn-sm lien-btn" href="${o.lien}" target="_blank">Voir →</a>` : ""}
+  </div>
+</div>`;
+  }).join("");
+}
+
+// ═══════════════════════════════════════════════
+// RENDU SUIVI
+// ═══════════════════════════════════════════════
+function renderSuivi() {
+  const q   = (document.getElementById("qSuivi").value || "").toLowerCase();
+  const auj = new Date();
+
+  let data = offres.filter(o => {
+    if (o.triageAction !== "en_suivi") return false;
+    if (q && !(o.poste+o.client+o.cabinet).toLowerCase().includes(q)) return false;
+    if (filtreS === "actif")     return ["À candidater","Postulé","Entretien","Relancé"].includes(o.suiviStatut);
+    if (filtreS === "postule")   return ["Postulé","Relancé"].includes(o.suiviStatut);
+    if (filtreS === "entretien") return o.suiviStatut === "Entretien";
+    if (filtreS === "clos")      return ["Sans réponse","Refus"].includes(o.suiviStatut);
+    return true;
+  }).sort((a,b) => {
+    const ord = ["À candidater","Postulé","Entretien","Relancé","Sans réponse","Refus"];
+    return ord.indexOf(a.suiviStatut) - ord.indexOf(b.suiviStatut);
+  });
+
+  document.getElementById("cntSuivi").textContent = `${data.length} offre${data.length>1?"s":""}`;
+
+  const tbody = document.getElementById("tbodySuivi");
+  if (!data.length) { tbody.innerHTML = `<tr><td colspan="10"><div class="empty">Aucune candidature pour ce filtre.</div></td></tr>`; return; }
+
+  // Construire le select statut avec couleur
+  const statutCls = { "À candidater":"s-candidater","Postulé":"s-postule","Entretien":"s-entretien","Relancé":"s-relance","Sans réponse":"s-sansreponse","Refus":"s-refus" };
+
+  tbody.innerHTML = data.map(o => {
+    const retardRelance = o.dateCandidature && ["Postulé","Relancé"].includes(o.suiviStatut)
+      && (auj - new Date(o.dateCandidature)) / 86400000 > CONFIG.SEUIL_RELANCE;
+
+    const selStatut = `<select class="sel-inline ${statutCls[o.suiviStatut]||""}"
+      onchange="ecrire('${o.id}','suivi_statut',this.value);this.className='sel-inline '+(${JSON.stringify(statutCls)}[this.value]||'');renderSuivi()">
+      ${STATUTS.map(s => `<option${s===o.suiviStatut?" selected":""}>${s}</option>`).join("")}
+    </select>`;
+
+    const selCV = `<select class="sel-inline" onchange="ecrire('${o.id}','cv_utilise',this.value)">
+      <option value="">—</option>
+      <option${o.cvUtilise==="Revenue"?" selected":""}>Revenue</option>
+      <option${o.cvUtilise==="Ops"?" selected":""}>Ops</option>
+    </select>`;
+
+    const clientAff = o.client === "À confirmer" ? "—" : esc(o.client);
+    const dlStyle   = o.dateLimite && (new Date(o.dateLimite)-auj)/86400000 < 7 && (new Date(o.dateLimite)-auj)/86400000 >= 0
+      ? "color:#633806;font-weight:600" : "";
+
+    return `<tr>
+  <td class="td-poste" title="${esc(o.poste)}">${esc(o.poste.length>40 ? o.poste.slice(0,38)+"…" : o.poste)}</td>
+  <td class="td-client">${clientAff}${o.cabinet ? `<br><span class="cabinet-tag">${esc(o.cabinet)}</span>` : ""}</td>
+  <td>${selStatut}${retardRelance ? '<br><span style="color:#a32d2d;font-size:11px">⚠ Relancer</span>' : ""}</td>
+  <td>${selCV}</td>
+  <td><input class="inp-inline" type="date" value="${o.dateCandidature}"
+       onchange="ecrire('${o.id}','date_candidature',this.value)"></td>
+  <td><input class="inp-inline" type="date" value="${o.dateLimite}" style="${dlStyle}"
+       onchange="ecrire('${o.id}','date_limite',this.value)"></td>
+  <td><input class="inp-inline" type="text" value="${esc(o.contact)}" placeholder="Nom…"
+       onchange="ecrire('${o.id}','contact',this.value)"></td>
+  <td><input class="inp-inline" type="date" value="${o.dateRelance}"
+       onchange="ecrire('${o.id}','date_relance',this.value)"></td>
+  <td><textarea class="notes-txt" placeholder="Notes…"
+       onchange="ecrire('${o.id}','notes_suivi',this.value)">${esc(o.notesSuivi)}</textarea></td>
+  <td>${o.lien ? `<a class="lien-btn" href="${o.lien}" target="_blank">→ LinkedIn</a>` : ""}</td>
+</tr>`;
+  }).join("");
+}
+
+// ═══════════════════════════════════════════════
+// UTILITAIRES
+// ═══════════════════════════════════════════════
+function esc(s) {
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+charger();
+</script>
+</body>
+</html>
