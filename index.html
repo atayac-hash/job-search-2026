@@ -12,8 +12,8 @@
 <script>
 const CONFIG = {
   SHEET_ID:    "1zQCXorQC0CqUV_v9JuCT3dA2hZ-S85u05tK6eabwyIc",
-  API_KEY:     "AIzaSyDwEevYIkEXrNd0C4cA0f_qd4tW9FrERgk",
-  WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbwFNe4TirTkeu0ChOlXxekzq8X1uhqf0yOmmXpD6tTStYwDXQiyrtKpjFkOrFWpFRuJyA/exec",
+  API_KEY:     "REMPLACER_CLE_API_GOOGLE",
+  WEBHOOK_URL: "REMPLACER_URL_APPS_SCRIPT",
   SEUIL_RELANCE: 10
 };
 </script>
@@ -269,24 +269,21 @@ const col = (r, i) => (r[i] || "").toString().trim();
 // ═══════════════════════════════════════════════
 // ÉCRITURE WEBHOOK
 // ═══════════════════════════════════════════════
-async function ecrire(id, champ, valeur) {
-  // Mise à jour locale immédiate
+// ecrire = synchrone pour l'UI, webhook en arrière-plan
+function ecrire(id, champ, valeur) {
+  // 1. Mise à jour locale IMMÉDIATE et synchrone
   const o = offres.find(x => x.id === id);
   if (o) {
     const camel = champ.replace(/_([a-z])/g, (_,c) => c.toUpperCase());
     o[camel] = valeur;
   }
-  // Envoi au webhook
-  try {
-    await fetch(CONFIG.WEBHOOK_URL, {
-      method: "POST",
-      mode:   "no-cors", // Apps Script ne renvoie pas CORS header — on ignore la réponse
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ id, champ, valeur })
-    });
-  } catch(e) {
-    console.warn("Webhook:", e.message);
-  }
+  // 2. Envoi webhook en arrière-plan
+  fetch(CONFIG.WEBHOOK_URL, {
+    method: "POST",
+    mode:   "no-cors",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ id, champ, valeur })
+  }).catch(e => console.warn("Webhook:", e.message));
   majStats();
   majAlertes();
 }
@@ -294,21 +291,21 @@ async function ecrire(id, champ, valeur) {
 // ═══════════════════════════════════════════════
 // ACTIONS TRIAGE
 // ═══════════════════════════════════════════════
-async function candidater(id) {
-  await ecrire(id, "triage_action", "en_suivi");
-  await ecrire(id, "suivi_statut",  "À candidater");
+function candidater(id) {
+  ecrire(id, "triage_action", "en_suivi");
+  ecrire(id, "suivi_statut",  "À candidater");
   renderTriage();
 }
 
-async function ecarter(id) {
-  await ecrire(id, "triage_action", "ecarte_manuel");
-  await ecrire(id, "suivi_statut",  "");
+function ecarter(id) {
+  ecrire(id, "triage_action", "ecarte_manuel");
+  ecrire(id, "suivi_statut",  "");
   renderTriage();
 }
 
-async function reactiverCarte(id) {
-  await ecrire(id, "triage_action", "");
-  await ecrire(id, "suivi_statut",  "");
+function reactiverCarte(id) {
+  ecrire(id, "triage_action", "");
+  ecrire(id, "suivi_statut",  "");
   renderTriage();
 }
 
@@ -461,7 +458,7 @@ function renderSuivi() {
       && (auj - new Date(o.dateCandidature)) / 86400000 > CONFIG.SEUIL_RELANCE;
 
     const selStatut = `<select class="sel-inline ${statutCls[o.suiviStatut]||""}"
-      onchange="ecrire('${o.id}','suivi_statut',this.value);this.className='sel-inline '+(${JSON.stringify(statutCls)}[this.value]||'');renderSuivi()">
+      onchange="ecrire('${o.id}','suivi_statut',this.value);this.className='sel-inline '+(${JSON.stringify(statutCls)}[this.value]||'')">
       ${STATUTS.map(s => `<option${s===o.suiviStatut?" selected":""}>${s}</option>`).join("")}
     </select>`;
 
