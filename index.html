@@ -5,18 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Job Search 2026</title>
 
-<!-- ═══════════════════════════════════════════════
-     CONFIGURATION — modifier ces 2 valeurs
-     Voir README.md pour obtenir API_KEY et WEBHOOK_URL
-═══════════════════════════════════════════════ -->
-<script>
-const CONFIG = {
-  SHEET_ID:    "1zQCXorQC0CqUV_v9JuCT3dA2hZ-S85u05tK6eabwyIc",
-  API_KEY:     "AIzaSyDwEevYIkEXrNd0C4cA0f_qd4tW9FrERgk",
-  WEBHOOK_URL: "https://script.google.com/macros/s/AKfycbwFNe4TirTkeu0ChOlXxekzq8X1uhqf0yOmmXpD6tTStYwDXQiyrtKpjFkOrFWpFRuJyA/exec",
-  SEUIL_RELANCE: 10
-};
-</script>
+<!-- CONFIG chargée depuis config.js (fichier local, non versionné) -->
+<!-- En production locale : créer config.js depuis config.template.js -->
+<script src="config.js"></script>
 
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
