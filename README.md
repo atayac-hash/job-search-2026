@@ -22,7 +22,6 @@ GitHub Pages (interface utilisateur)
 |---|---|---|
 | `index.html` | Page web — triage + suivi | ✅ GitHub |
 | `config.template.js` | Template configuration (sans valeurs) | ✅ GitHub |
-| `config.js` | Configuration locale avec vraies valeurs | ❌ .gitignore |
 | `Scan.gs` | Script Apps Script — scan Gmail | ✅ GitHub |
 | `Webhook.gs` | Script Apps Script — écriture Sheet | ✅ GitHub |
 | `.gitignore` | Fichiers exclus du versionnement | ✅ GitHub |
@@ -74,21 +73,13 @@ Ces valeurs sont lues automatiquement par `Scan.gs` et `Webhook.gs`. **À ne con
 2. Fonction : `scanGmail`
 3. Événement : **Déclencheur basé sur le temps → Quotidien → Entre 7h et 8h**
 
-### 6. Configuration locale (config.js)
+### 6. Configuration dans index.html
 
-```bash
-cp config.template.js config.js
-# Éditer config.js avec les vraies valeurs
-```
+Les valeurs `API_KEY` et `WEBHOOK_URL` sont directement dans `index.html`, dans le bloc `CONFIG` en tête de fichier.
 
-```javascript
-const CONFIG = {
-  SHEET_ID:    "1zQCXorQC0CqUV_v9JuCT3dA2hZ-S85u05tK6eabwyIc",
-  API_KEY:     "AIzaSy...",        // clé étape 1
-  WEBHOOK_URL: "https://script.google.com/macros/s/.../exec",  // URL étape 4
-  SEUIL_RELANCE: 10
-};
-```
+À mettre à jour si la clé API ou l'URL webhook changent.
+
+> **Note architecture :** `config.js` local n'est pas utilisé pour GitHub Pages — un fichier local n'est pas accessible par un hébergement public. Les secrets côté web sont dans `index.html`. La sécurité repose sur la restriction de la clé API Google (restreinte à ce Sheet uniquement) et l'obscurité de l'URL webhook Apps Script.
 
 ### 7. GitHub Pages
 
@@ -161,16 +152,16 @@ Ce repo suit un pattern standard applicable à tout projet similaire :
 
 ```
 repo/
-├── index.html              # Interface web
-├── config.template.js      # Template public sans secrets
-├── config.js               # Secrets locaux (gitignored)
-├── .gitignore              # Exclut config.js
+├── index.html              # Interface web (contient CONFIG avec clés)
+├── config.template.js      # Template public sans valeurs (documentation)
+├── .gitignore              # Bonnes pratiques
 ├── [NomScript].gs          # Script(s) Apps Script (secrets via Properties)
 ├── README.md               # Ce fichier
 └── docs/                   # Spécifications et system prompts
 ```
 
 **Secrets :**
-- Côté Apps Script → `PropertiesService.getScriptProperties()`
-- Côté web → `config.js` local (non versionné)
-- Jamais en dur dans le code versionné
+- Côté Apps Script → `PropertiesService.getScriptProperties()` (jamais dans le code)
+- Côté web (GitHub Pages) → `CONFIG` inline dans `index.html`
+  - Acceptable pour usage personnel : clé API restreinte au Sheet, URL webhook non-devinable
+  - Limiter les permissions de la clé API Google au strict nécessaire

@@ -39,9 +39,10 @@ Clés configurées une seule fois dans Apps Script → Paramètres → Propriét
 - `CLAUDE_API_KEY` = clé API Anthropic
 
 **Dans index.html (page web) :**
-Les secrets sont dans `config.js` — fichier local non versionné (dans .gitignore).
-Le repo GitHub contient `config.template.js` (sans valeurs) mais pas `config.js`.
-Arnaud maintient `config.js` localement et le copie manuellement si besoin.
+Les secrets (`API_KEY`, `WEBHOOK_URL`) sont dans le bloc `CONFIG` en tête de `index.html`, versionné sur GitHub.
+GitHub Pages ne peut pas servir un fichier local — `config.js` n'est donc pas utilisé côté web.
+Sécurité : clé API Google restreinte à ce Sheet, URL webhook non-devinable.
+`config.template.js` reste dans le repo comme documentation des variables attendues.
 
 ---
 
