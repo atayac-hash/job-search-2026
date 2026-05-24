@@ -82,7 +82,6 @@ button,select,input,textarea{font-family:inherit;font-size:inherit}
 .b-ecarte-auto{background:#fcebeb;color:#791f1f}
 .b-new{background:#e6f1fb;color:#0c447c}
 .b-shortlist{background:#eaf3de;color:#0f6e56}
-.b-deadline{background:#faeeda;color:#633806}
 .meta{font-size:12px;color:#888780;display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;align-items:center}
 .cabinet-tag{font-size:11px;background:#f1efe8;color:#5f5e5a;border-radius:20px;padding:1px 8px}
 .salaire-tag{font-size:12px;color:#3b6d11;font-weight:500}
@@ -107,7 +106,7 @@ tbody tr:hover td{background:#fafaf8}
 .s-candidater{color:#185fa5;font-weight:600}
 .s-postule{color:#0f6e56;font-weight:600}
 .s-entretien{color:#639922;font-weight:600}
-.s-relance{color:#ba7517;font-weight:600}
+.s-arelancer{color:#ba7517;font-weight:600}
 .s-sansreponse{color:#888780}
 .s-refus{color:#a32d2d}
 
@@ -184,9 +183,8 @@ tbody tr:hover td{background:#fafaf8}
             <th>Statut</th>
             <th>CV</th>
             <th>Candidature</th>
-            <th>Deadline</th>
             <th>Contact</th>
-            <th>Relance</th>
+            <th>À relancer</th>
             <th>Notes</th>
             <th></th>
           </tr>
@@ -205,7 +203,7 @@ tbody tr:hover td{background:#fafaf8}
 let offres = [];
 let filtreT = "actives";
 let filtreS = "actif";
-const STATUTS = ["À candidater","Postulé","Entretien","Relancé","Sans réponse","Refus"];
+const STATUTS = ["À candidater","Postulé","Entretien","À relancer","Sans réponse","Refus"];
 
 // ═══════════════════════════════════════════════
 // NAVIGATION
@@ -229,6 +227,22 @@ function setFS(el) {
 }
 
 // ═══════════════════════════════════════════════
+// CALCUL DATE RELANCE — J+10 jours ouvrés (lun-ven)
+// ═══════════════════════════════════════════════
+function prochainJourOuvre(dateStr, joursOuvres) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  let count = 0;
+  while (count < joursOuvres) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++; // 0=dimanche, 6=samedi
+  }
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+// ═══════════════════════════════════════════════
 // CHARGEMENT DONNÉES
 // ═══════════════════════════════════════════════
 async function charger() {
@@ -240,7 +254,7 @@ async function charger() {
     const r   = await fetch(url);
     const d   = await r.json();
     if (d.error) throw new Error(d.error.message);
-    const rows = (d.values || []).slice(1); // ignorer en-têtes
+    const rows = (d.values || []).slice(1);
     offres = rows.map(r => ({
       id:              col(r,0),  jobId:           col(r,1),
       client:          col(r,2),  cabinet:         col(r,3),
@@ -271,22 +285,23 @@ const col = (r, i) => (r[i] || "").toString().trim();
 
 // ═══════════════════════════════════════════════
 // ÉCRITURE WEBHOOK
+// FIX : suppression mode "no-cors" qui bloquait les headers
+// et empêchait l'écriture réelle dans le Sheet
 // ═══════════════════════════════════════════════
-// ecrire = synchrone pour l'UI, webhook en arrière-plan
 function ecrire(id, champ, valeur) {
-  // 1. Mise à jour locale IMMÉDIATE et synchrone
+  // 1. Mise à jour locale immédiate
   const o = offres.find(x => x.id === id);
   if (o) {
     const camel = champ.replace(/_([a-z])/g, (_,c) => c.toUpperCase());
     o[camel] = valeur;
   }
-  // 2. Envoi webhook en arrière-plan
+  // 2. Envoi webhook — Content-Type text/plain pour éviter le preflight CORS
+  //    Apps Script lit e.postData.contents correctement avec ce content-type
   fetch(CONFIG.WEBHOOK_URL, {
-    method: "POST",
-    mode:   "no-cors",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ id, champ, valeur })
-  }).catch(e => console.warn("Webhook:", e.message));
+    method:  "POST",
+    headers: {"Content-Type": "text/plain"},
+    body:    JSON.stringify({ id, champ, valeur })
+  }).catch(e => console.error("Webhook:", e.message));
   majStats();
   majAlertes();
 }
@@ -318,7 +333,7 @@ function reactiverCarte(id) {
 function majStats() {
   document.getElementById("s-total").textContent     = offres.length;
   document.getElementById("s-short").textContent     = offres.filter(o => o.suiviStatut === "À candidater").length;
-  document.getElementById("s-postule").textContent   = offres.filter(o => ["Postulé","Entretien","Relancé"].includes(o.suiviStatut)).length;
+  document.getElementById("s-postule").textContent   = offres.filter(o => ["Postulé","Entretien","À relancer"].includes(o.suiviStatut)).length;
   document.getElementById("s-entretien").textContent = offres.filter(o => o.suiviStatut === "Entretien").length;
 }
 
@@ -326,24 +341,18 @@ function majAlertes() {
   const auj = new Date();
   const al  = [];
 
-  // Deadlines < 7j
-  const dl = offres.filter(o => {
-    if (!o.dateLimite || o.triageAction === "ecarte_manuel") return false;
-    const j = (new Date(o.dateLimite) - auj) / 86400000;
-    return j >= 0 && j < 7;
-  });
-  if (dl.length) al.push({ cls:"alerte-warn",    txt:`⚠️ ${dl.length} offre(s) avec deadline dans moins de 7 jours` });
-
-  // Relances en retard
+  // Relances en retard — offres Postulé ou À relancer dont date_relance est dépassée
   const rl = offres.filter(o => {
-    if (!o.dateCandidature || !["Postulé","Relancé"].includes(o.suiviStatut)) return false;
-    return (auj - new Date(o.dateCandidature)) / 86400000 > CONFIG.SEUIL_RELANCE;
+    if (o.triageAction !== "en_suivi") return false;
+    if (!["Postulé","À relancer"].includes(o.suiviStatut)) return false;
+    if (!o.dateRelance) return false;
+    return new Date(o.dateRelance) <= auj;
   });
-  if (rl.length) al.push({ cls:"alerte-relance", txt:`🔔 ${rl.length} candidature(s) sans réponse depuis plus de ${CONFIG.SEUIL_RELANCE} jours` });
+  if (rl.length) al.push({ cls:"alerte-relance", txt:`🔔 ${rl.length} candidature(s) à relancer` });
 
   // Shortlist en attente
   const sh = offres.filter(o => o.suiviStatut === "À candidater").length;
-  if (sh) al.push({ cls:"alerte-info",   txt:`📋 ${sh} offre(s) shortlistée(s) à candidater` });
+  if (sh) al.push({ cls:"alerte-info", txt:`📋 ${sh} offre(s) shortlistée(s) à candidater` });
 
   document.getElementById("alertes").innerHTML = al.map(a =>
     `<div class="alerte ${a.cls}">${a.txt}</div>`).join("");
@@ -359,7 +368,7 @@ function renderTriage() {
 
   let data = offres.filter(o => {
     if (q && !(o.poste+o.client+o.cabinet+o.localisation).toLowerCase().includes(q)) return false;
-    const cat = o.catValidee || o.catAuto;
+    const cat    = o.catValidee || o.catAuto;
     const ecarte = o.triageAction === "ecarte_manuel";
     if (filtreT === "actives")   return !ecarte;
     if (filtreT === "shortlist") return o.suiviStatut === "À candidater";
@@ -369,8 +378,8 @@ function renderTriage() {
     return true;
   });
 
-  if (sort === "cat")    data.sort((a,b) => ["cible","jugement","ecarte"].indexOf(a.catAuto) - ["cible","jugement","ecarte"].indexOf(b.catAuto));
-  else if (sort==="client") data.sort((a,b) => a.client.localeCompare(b.client,"fr"));
+  if (sort === "cat")       data.sort((a,b) => ["cible","jugement","ecarte"].indexOf(a.catAuto) - ["cible","jugement","ecarte"].indexOf(b.catAuto));
+  else if (sort === "client") data.sort((a,b) => a.client.localeCompare(b.client,"fr"));
   else data.sort((a,b) => new Date(b.dateReception) - new Date(a.dateReception));
 
   document.getElementById("cntTriage").textContent = `${data.length} offre${data.length>1?"s":""}`;
@@ -383,11 +392,10 @@ function renderTriage() {
     const isNew    = (auj - new Date(o.dateReception)) < 48*3600000;
     const isShort  = o.suiviStatut === "À candidater";
     const isEcarte = o.triageAction === "ecarte_manuel";
-    const dlUrgent = o.dateLimite && (new Date(o.dateLimite)-auj)/86400000 < 7 && (new Date(o.dateLimite)-auj)/86400000 >= 0;
-    const clientAff= o.client === "À confirmer" ? "—" : esc(o.client);
+    const clientAff = o.client === "À confirmer" ? "—" : esc(o.client);
 
-    const badgeCat = cat==="cible"   ? `<span class="badge b-cible">Cible</span>`
-                   : cat==="ecarte"  ? `<span class="badge b-ecarte-auto">Écarté auto</span>`
+    const badgeCat = cat==="cible"  ? `<span class="badge b-cible">Cible</span>`
+                   : cat==="ecarte" ? `<span class="badge b-ecarte-auto">Écarté auto</span>`
                    :                  `<span class="badge b-jugement">À juger</span>`;
 
     let actions;
@@ -409,14 +417,13 @@ function renderTriage() {
         ${badgeCat}
         ${isNew   ? '<span class="badge b-new">Nouveau</span>' : ""}
         ${isShort ? '<span class="badge b-shortlist">À candidater</span>' : ""}
-        ${dlUrgent ? `<span class="badge b-deadline">⚠ Deadline ${o.dateLimite}</span>` : ""}
       </div>
     </div>
     <div class="meta">
       <span>${clientAff}</span>
-      ${o.cabinet ? `<span class="cabinet-tag">${esc(o.cabinet)}</span>` : ""}
+      ${o.cabinet      ? `<span class="cabinet-tag">${esc(o.cabinet)}</span>` : ""}
       ${o.localisation ? `<span>📍 ${esc(o.localisation)}</span>` : ""}
-      ${o.salaire ? `<span class="salaire-tag">💰 ${esc(o.salaire)}</span>` : ""}
+      ${o.salaire      ? `<span class="salaire-tag">💰 ${esc(o.salaire)}</span>` : ""}
       <span>${o.dateReception}</span>
     </div>
   </div>
@@ -438,30 +445,39 @@ function renderSuivi() {
   let data = offres.filter(o => {
     if (o.triageAction !== "en_suivi") return false;
     if (q && !(o.poste+o.client+o.cabinet).toLowerCase().includes(q)) return false;
-    if (filtreS === "actif")     return ["À candidater","Postulé","Entretien","Relancé"].includes(o.suiviStatut);
-    if (filtreS === "postule")   return ["Postulé","Relancé"].includes(o.suiviStatut);
+    if (filtreS === "actif")     return ["À candidater","Postulé","Entretien","À relancer"].includes(o.suiviStatut);
+    if (filtreS === "postule")   return ["Postulé","À relancer"].includes(o.suiviStatut);
     if (filtreS === "entretien") return o.suiviStatut === "Entretien";
     if (filtreS === "clos")      return ["Sans réponse","Refus"].includes(o.suiviStatut);
     return true;
   }).sort((a,b) => {
-    const ord = ["À candidater","Postulé","Entretien","Relancé","Sans réponse","Refus"];
+    const ord = ["À candidater","Postulé","Entretien","À relancer","Sans réponse","Refus"];
     return ord.indexOf(a.suiviStatut) - ord.indexOf(b.suiviStatut);
   });
 
   document.getElementById("cntSuivi").textContent = `${data.length} offre${data.length>1?"s":""}`;
 
   const tbody = document.getElementById("tbodySuivi");
-  if (!data.length) { tbody.innerHTML = `<tr><td colspan="10"><div class="empty">Aucune candidature pour ce filtre.</div></td></tr>`; return; }
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty">Aucune candidature pour ce filtre.</div></td></tr>`;
+    return;
+  }
 
-  // Construire le select statut avec couleur
-  const statutCls = { "À candidater":"s-candidater","Postulé":"s-postule","Entretien":"s-entretien","Relancé":"s-relance","Sans réponse":"s-sansreponse","Refus":"s-refus" };
+  const statutCls = {
+    "À candidater": "s-candidater",
+    "Postulé":      "s-postule",
+    "Entretien":    "s-entretien",
+    "À relancer":   "s-arelancer",
+    "Sans réponse": "s-sansreponse",
+    "Refus":        "s-refus"
+  };
 
   tbody.innerHTML = data.map(o => {
-    const retardRelance = o.dateCandidature && ["Postulé","Relancé"].includes(o.suiviStatut)
-      && (auj - new Date(o.dateCandidature)) / 86400000 > CONFIG.SEUIL_RELANCE;
+    const retardRelance = o.dateRelance && ["Postulé","À relancer"].includes(o.suiviStatut)
+      && new Date(o.dateRelance) <= auj;
 
     const selStatut = `<select class="sel-inline ${statutCls[o.suiviStatut]||""}"
-      onchange="ecrire('${o.id}','suivi_statut',this.value);this.className='sel-inline '+(${JSON.stringify(statutCls)}[this.value]||'')">
+      onchange="onChangeStatut('${o.id}',this)">
       ${STATUTS.map(s => `<option${s===o.suiviStatut?" selected":""}>${s}</option>`).join("")}
     </select>`;
 
@@ -472,8 +488,9 @@ function renderSuivi() {
     </select>`;
 
     const clientAff = o.client === "À confirmer" ? "—" : esc(o.client);
-    const dlStyle   = o.dateLimite && (new Date(o.dateLimite)-auj)/86400000 < 7 && (new Date(o.dateLimite)-auj)/86400000 >= 0
-      ? "color:#633806;font-weight:600" : "";
+
+    // Alerte visuelle si date relance dépassée
+    const relanceStyle = retardRelance ? "color:#a32d2d;font-weight:600" : "";
 
     return `<tr>
   <td class="td-poste" title="${esc(o.poste)}">${esc(o.poste.length>40 ? o.poste.slice(0,38)+"…" : o.poste)}</td>
@@ -481,18 +498,55 @@ function renderSuivi() {
   <td>${selStatut}${retardRelance ? '<br><span style="color:#a32d2d;font-size:11px">⚠ Relancer</span>' : ""}</td>
   <td>${selCV}</td>
   <td><input class="inp-inline" type="date" value="${o.dateCandidature}"
-       onchange="ecrire('${o.id}','date_candidature',this.value)"></td>
-  <td><input class="inp-inline" type="date" value="${o.dateLimite}" style="${dlStyle}"
-       onchange="ecrire('${o.id}','date_limite',this.value)"></td>
+       onchange="onChangeDateCandidature('${o.id}',this.value)"></td>
   <td><input class="inp-inline" type="text" value="${esc(o.contact)}" placeholder="Nom…"
        onchange="ecrire('${o.id}','contact',this.value)"></td>
-  <td><input class="inp-inline" type="date" value="${o.dateRelance}"
+  <td><input class="inp-inline" type="date" value="${o.dateRelance}" style="${relanceStyle}"
        onchange="ecrire('${o.id}','date_relance',this.value)"></td>
   <td><textarea class="notes-txt" placeholder="Notes…"
        onchange="ecrire('${o.id}','notes_suivi',this.value)">${esc(o.notesSuivi)}</textarea></td>
   <td>${o.lien ? `<a class="lien-btn" href="${o.lien}" target="_blank">→ LinkedIn</a>` : ""}</td>
 </tr>`;
   }).join("");
+}
+
+// ═══════════════════════════════════════════════
+// HANDLERS SPÉCIAUX
+// ═══════════════════════════════════════════════
+
+// Changement statut : met à jour la couleur du select + écrit dans le Sheet
+function onChangeStatut(id, selectEl) {
+  const valeur = selectEl.value;
+  const statutCls = {
+    "À candidater": "s-candidater",
+    "Postulé":      "s-postule",
+    "Entretien":    "s-entretien",
+    "À relancer":   "s-arelancer",
+    "Sans réponse": "s-sansreponse",
+    "Refus":        "s-refus"
+  };
+  selectEl.className = "sel-inline " + (statutCls[valeur] || "");
+  ecrire(id, "suivi_statut", valeur);
+}
+
+// Changement date candidature : écrit la date ET calcule la date de relance J+10 ouvrés
+function onChangeDateCandidature(id, valeur) {
+  ecrire(id, "date_candidature", valeur);
+  const dateRelance = prochainJourOuvre(valeur, CONFIG.SEUIL_RELANCE);
+  if (dateRelance) {
+    ecrire(id, "date_relance", dateRelance);
+    // Mettre à jour le champ date_relance visuellement dans la même ligne
+    const o = offres.find(x => x.id === id);
+    if (o) {
+      // Trouver l'input date_relance dans le DOM et le mettre à jour
+      const inputs = document.querySelectorAll(`#tbodySuivi input[type="date"]`);
+      inputs.forEach(inp => {
+        // L'input relance est le 2ème input[type=date] de la ligne de cette offre
+        // On re-render proprement plutôt que de chercher dans le DOM
+      });
+      renderSuivi();
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════
